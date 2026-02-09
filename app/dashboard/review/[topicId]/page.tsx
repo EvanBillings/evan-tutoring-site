@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation"; 
-import { useUser } from "@clerk/nextjs";
+import { useUser, UserButton } from "@clerk/nextjs";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, XCircle, AlertCircle } from "lucide-react";
