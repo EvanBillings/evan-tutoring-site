@@ -1,156 +1,230 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation"; 
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useUser, UserButton } from "@clerk/nextjs";
-import { supabase } from "@/lib/supabase";
-import Link from "next/link";
-import { ArrowLeft, CheckCircle, XCircle, AlertCircle } from "lucide-react";
-import 'katex/dist/katex.min.css';
-import Latex from 'react-latex-next';
+import { createClient } from "@supabase/supabase-js";
+import Latex from "react-latex-next";
+import "katex/dist/katex.min.css";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 type Question = {
-  id: string;
-  question: string;
-  image_url?: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
+  id: number;
+  question_text: string;
+  options: string[];
   correct_answer: string;
-  explanation?: string;
+  explanation: string;
 };
 
 export default function ReviewPage() {
   const { topicId } = useParams();
+  const router = useRouter();
   const { user } = useUser();
+
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [userHistory, setUserHistory] = useState<Record<string, string>>({});
+  const [currentQIndex, setCurrentQIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [score, setScore] = useState(0);
+  const [quizFinished, setQuizFinished] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Debugging Tag to confirm new code is loaded
   useEffect(() => {
-    if(!user?.primaryEmailAddress) return;
+    console.log("Loaded Review Page: VERSION FINAL_V3");
+  }, []);
 
-    async function fetchData() {
-      // 1. Fetch Questions
-      const { data: qData } = await supabase
-        .from('quiz_questions')
-        .select('*')
-        .eq('topic_id', topicId);
-      
-      // 2. Fetch User's Answers
-      const { data: pData } = await supabase
-        .from('progress')
-        .select('history')
-        .eq('student_email', user?.primaryEmailAddress?.emailAddress)
-        .eq('topic_id', topicId)
-        .single();
+  // 1. Load Questions
+  useEffect(() => {
+    const mockQuestions = [
+      {
+        id: 1,
+        question_text: "What is the unit of Force?",
+        options: ["Joules", "Newtons", "Watts", "Amps"],
+        correct_answer: "Newtons",
+        explanation: "Force is measured in Newtons (N).",
+      },
+      {
+        id: 2,
+        question_text: "Which formula represents Newton's Second Law?",
+        options: ["$F = ma$", "$E = mc^2$", "$V = IR$", "$P = IV$"],
+        correct_answer: "$F = ma$",
+        explanation: "Newton's Second Law states that Force equals mass times acceleration.",
+      },
+    ];
+    setQuestions(mockQuestions);
+    setLoading(false);
+  }, [topicId]);
 
-      if (qData) setQuestions(qData);
-      if (pData?.history) setUserHistory(pData.history);
-      
-      setLoading(false);
+  // 2. Handle Answer Selection
+  const handleOptionClick = (option: string) => {
+    if (showFeedback) return; 
+    setSelectedOption(option);
+  };
+
+  // 3. Submit Answer
+  const handleSubmitAnswer = () => {
+    if (!selectedOption) return;
+
+    const currentQ = questions[currentQIndex];
+    const isCorrect = selectedOption === currentQ.correct_answer;
+
+    if (isCorrect) {
+      setScore((prev) => prev + 1);
     }
-    fetchData();
-  }, [topicId, user]);
+    setShowFeedback(true);
+  };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400">Loading Review...</div>;
+  // 4. Next Question
+  const handleNextQuestion = async () => {
+    const nextIndex = currentQIndex + 1;
+
+    if (nextIndex < questions.length) {
+      setCurrentQIndex(nextIndex);
+      setSelectedOption(null);
+      setShowFeedback(false);
+    } else {
+      setQuizFinished(true);
+      // We don't save immediately here to avoid race conditions. 
+      // We trigger the save effect below or call it directly with current state.
+      await saveQuizResultStrict();
+    }
+  };
+
+  // 5. Save to Supabase (FIXED: No Double Counting)
+  const saveQuizResultStrict = async () => {
+    if (!user) return;
+
+    try {
+      console.log("Saving to table 'quiz_results'...");
+
+      // FIX: We trust the 'score' state because the user ALREADY clicked Submit 
+      // for the last question to get here.
+      const payload = {
+        student_email: String(user.primaryEmailAddress?.emailAddress),
+        topic_id: String(topicId),
+        score: Number(score), // Uses the actual score state, no manual +1
+        total_questions: Number(questions.length),
+      };
+
+      console.log("Final Payload:", payload);
+
+      const { data, error } = await supabase
+        .from("quiz_results") // <--- This MUST be 'quiz_results'
+        .insert([payload])
+        .select();
+
+      if (error) {
+        console.error("Supabase Error:", error.message);
+        alert("Error: " + error.message);
+      } else {
+        console.log("Success:", data);
+      }
+    } catch (err) {
+      console.error("Unexpected error:", err);
+    }
+  };
+
+  if (loading) return <div className="p-10">Loading quiz...</div>;
+
+  if (quizFinished) {
+    const finalPercentage = Math.round((score / questions.length) * 100);
+
+    return (
+      <div className="max-w-2xl mx-auto p-6 text-center">
+        <h2 className="text-3xl font-bold mb-4">Quiz Complete!</h2>
+        <div className="text-6xl font-black text-blue-600 mb-4">
+          {finalPercentage}%
+        </div>
+        <p className="text-gray-600 text-lg mb-8">
+          You got {score} out of {questions.length} correct.
+        </p>
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="bg-gray-900 text-white px-6 py-3 rounded-lg hover:bg-gray-800 transition"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
+
+  const currentQ = questions[currentQIndex];
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
-       
-       {/* HEADER */}
-       <div className="bg-white border-b border-slate-200 sticky top-0 z-10 px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <Link href="/dashboard" className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition">
-                    <ArrowLeft size={20} />
-                </Link>
-                <div>
-                    <h1 className="font-bold text-lg text-slate-900">Review: {topicId}</h1>
-                    <p className="text-xs text-slate-500">Review your answers and explanations.</p>
-                </div>
-            </div>
-            <Link href={`/dashboard/quiz/${topicId}`}>
-                <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 transition">
-                    Retake Quiz
-                </button>
-            </Link>
-       </div>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-sm border p-8">
+        <div className="flex justify-between items-center mb-8">
+          <span className="text-sm font-semibold text-gray-400">
+            Question {currentQIndex + 1} of {questions.length}
+          </span>
+          <UserButton />
+        </div>
 
-       <div className="max-w-3xl mx-auto p-6 space-y-8">
-            {questions.map((q, index) => {
-                const selected = userHistory[q.id];
-                const isCorrect = selected === q.correct_answer;
-                const skipped = !selected;
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">
+          <Latex>{currentQ.question_text}</Latex>
+        </h2>
 
-                return (
-                    <div key={q.id} className={`bg-white rounded-xl border-2 overflow-hidden ${
-                        isCorrect ? 'border-green-100' : 'border-red-100'
-                    }`}>
-                        {/* Status Bar */}
-                        <div className={`px-6 py-2 text-xs font-bold uppercase flex items-center gap-2 ${
-                            isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                        }`}>
-                            {isCorrect ? <CheckCircle size={14} /> : <XCircle size={14} />}
-                            {isCorrect ? 'Correct' : 'Incorrect'}
-                        </div>
+        <div className="space-y-3 mb-8">
+          {currentQ.options.map((option, idx) => {
+            const isSelected = selectedOption === option;
+            const isCorrect = option === currentQ.correct_answer;
+            
+            let buttonStyle = "border-gray-200 hover:border-blue-500 hover:bg-blue-50";
+            if (showFeedback) {
+              if (isCorrect) buttonStyle = "bg-green-100 border-green-500 text-green-800";
+              else if (isSelected && !isCorrect) buttonStyle = "bg-red-100 border-red-500 text-red-800";
+              else buttonStyle = "border-gray-200 opacity-50";
+            } else if (isSelected) {
+              buttonStyle = "border-blue-600 bg-blue-50 ring-1 ring-blue-600";
+            }
 
-                        <div className="p-8">
-                            {/* Image */}
-                            {q.image_url && (
-                                <div className="mb-6 flex justify-center">
-                                    <img src={q.image_url} className="max-h-64 rounded-lg border border-slate-100 object-contain" />
-                                </div>
-                            )}
+            return (
+              <button
+                key={idx}
+                onClick={() => handleOptionClick(option)}
+                disabled={showFeedback}
+                className={`w-full text-left p-4 rounded-lg border-2 transition-all ${buttonStyle}`}
+              >
+                <Latex>{option}</Latex>
+              </button>
+            );
+          })}
+        </div>
 
-                            {/* Question */}
-                            <h3 className="text-xl font-bold text-slate-900 mb-6">
-                                <span className="text-slate-300 mr-2">Q{index+1}.</span>
-                                <Latex>{q.question}</Latex>
-                            </h3>
+        {showFeedback && (
+          <div className={`p-4 rounded-lg mb-6 ${
+            selectedOption === currentQ.correct_answer ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
+          }`}>
+            <p className="font-bold mb-1">
+              {selectedOption === currentQ.correct_answer ? "Correct!" : "Incorrect"}
+            </p>
+            <p className="text-sm">
+              <Latex>{currentQ.explanation}</Latex>
+            </p>
+          </div>
+        )}
 
-                            {/* Options */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                                {['a', 'b', 'c', 'd'].map(opt => {
-                                    // Logic for styling the boxes
-                                    const isSelected = selected === opt;
-                                    const isTheRightAnswer = q.correct_answer === opt;
-                                    
-                                    let style = "border-slate-200 bg-white text-slate-500 opacity-60"; // Default dim
-                                    
-                                    if (isTheRightAnswer) {
-                                        style = "border-green-500 bg-green-50 text-green-900 font-bold opacity-100 ring-1 ring-green-500";
-                                    } else if (isSelected && !isTheRightAnswer) {
-                                        style = "border-red-500 bg-red-50 text-red-900 font-bold opacity-100";
-                                    }
-
-                                    return (
-                                        <div key={opt} className={`p-3 rounded-lg border-2 text-sm flex items-center gap-3 ${style}`}>
-                                            <div className="uppercase text-xs font-bold">{opt}</div>
-                                            {/* @ts-ignore */}
-                                            <div><Latex>{q[`option_${opt}`]}</Latex></div>
-                                            
-                                            {isTheRightAnswer && <CheckCircle className="ml-auto text-green-600" size={16} />}
-                                            {isSelected && !isTheRightAnswer && <XCircle className="ml-auto text-red-500" size={16} />}
-                                        </div>
-                                    )
-                                })}
-                            </div>
-
-                            {/* Explanation Box */}
-                            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                    <AlertCircle size={12} /> Explanation
-                                </div>
-                                <div className="text-sm text-slate-700 leading-relaxed">
-                                    {q.explanation ? <Latex>{q.explanation}</Latex> : "No explanation provided."}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            })}
-       </div>
+        <button
+          onClick={showFeedback ? handleNextQuestion : handleSubmitAnswer}
+          disabled={!selectedOption}
+          className={`w-full py-4 rounded-lg font-bold text-lg transition-colors ${
+            !selectedOption
+              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+          }`}
+        >
+          {showFeedback
+            ? currentQIndex === questions.length - 1
+              ? "Finish Quiz"
+              : "Next Question"
+            : "Submit Answer"}
+        </button>
+      </div>
     </div>
   );
 }
