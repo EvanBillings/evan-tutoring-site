@@ -4,7 +4,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { 
-  ArrowLeft, Check, Video, FileQuestion, BookOpen, 
+  ArrowLeft, Check, Video, FileQuestion, 
   ShieldAlert, User
 } from "lucide-react";
 
@@ -39,18 +39,12 @@ type Module = ModuleRow & {
 };
 
 export default function StudentDetail({ params }: { params: Promise<{ email: string }> }) {
-  // Unwrap params using React.use() for Next.js 15 compatibility, or await if async component
-  // For client components in older Next.js, params are props. 
-  // We'll handle the email decoding safely inside the effect or using the hook pattern.
-  const [targetEmail, setTargetEmail] = useState<string>("");
+  // Unwrap params using React.use() for Next.js 15 compatibility
+  const resolvedParams = use(params);
+  const targetEmail = decodeURIComponent(resolvedParams.email);
   
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Initialize email from params
-  useEffect(() => {
-    params.then(p => setTargetEmail(decodeURIComponent(p.email)));
-  }, [params]);
 
   // --- 1. FETCH TARGET STUDENT DATA ---
   useEffect(() => {
@@ -72,7 +66,7 @@ export default function StudentDetail({ params }: { params: Promise<{ email: str
 
         if (progressError) throw progressError;
 
-        // C. Merge
+        // C. Merge curriculum with student progress
         const mergedData = (modulesData as ModuleRow[]).map((mod) => {
           const modTopics = (topicsData as TopicRow[])
             .filter((t) => t.module_id === mod.id)
@@ -125,7 +119,7 @@ export default function StudentDetail({ params }: { params: Promise<{ email: str
   };
 
   if (loading) {
-    return <div className="p-12 text-center text-slate-500">Loading student profile...</div>;
+    return <div className="p-12 text-center text-slate-500 font-sans">Loading student profile...</div>;
   }
 
   return (
@@ -136,7 +130,7 @@ export default function StudentDetail({ params }: { params: Promise<{ email: str
         <div className="flex items-center gap-3 text-amber-900 font-bold text-sm uppercase tracking-wide">
             <ShieldAlert size={18} /> Teacher View • Editing Mode
         </div>
-        <Link href="/admin" className="text-amber-800 hover:text-amber-950 font-bold text-sm flex items-center gap-1">
+        <Link href="/admin" className="text-amber-800 hover:text-amber-950 font-bold text-sm flex items-center gap-1 no-underline">
             <ArrowLeft size={16} /> Back to Dashboard
         </Link>
       </div>
@@ -145,58 +139,65 @@ export default function StudentDetail({ params }: { params: Promise<{ email: str
         
         {/* STUDENT HEADER */}
         <div className="flex items-center gap-6 mb-10">
-            <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 border-4 border-white shadow-lg">
-                <User size={40} />
+            <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100 italic font-black text-3xl">
+                {targetEmail[0].toUpperCase()}
             </div>
             <div>
-                <h1 className="text-4xl font-bold text-slate-900">{targetEmail.split('@')[0]}</h1>
-                <div className="text-slate-500 font-mono text-sm mt-1">{targetEmail}</div>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight m-0">
+                  {targetEmail.split('@')[0]}
+                </h1>
+                <div className="text-slate-400 font-bold text-sm mt-1">{targetEmail}</div>
             </div>
         </div>
 
         {/* TRACKER LIST */}
         <div className="space-y-6">
           {modules.map((module) => (
-            <div key={module.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-                <h3 className="font-bold text-lg text-slate-800">{module.title}</h3>
+            <div key={module.id} className="bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
+              <div className="bg-slate-50 px-8 py-5 border-b border-slate-200 flex justify-between items-center">
+                <h3 className="font-black text-xl text-slate-900 m-0">{module.title}</h3>
                 {/* Visual completion bar for this module */}
-                <div className="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
-                    <div 
-                        className="h-full bg-green-500" 
-                        style={{ width: `${(module.topics.filter(t => t.status === 'complete').length / module.topics.length) * 100}%` }}
-                    ></div>
+                <div className="flex items-center gap-4">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                    {Math.round((module.topics.filter(t => t.status === 'complete').length / module.topics.length) * 100)}%
+                  </span>
+                  <div className="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
+                      <div 
+                          className="h-full bg-blue-600 transition-all duration-500" 
+                          style={{ width: `${(module.topics.filter(t => t.status === 'complete').length / module.topics.length) * 100}%` }}
+                      ></div>
+                  </div>
                 </div>
               </div>
               
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-50">
                 {module.topics.map((topic) => (
-                  <div key={topic.id} className="p-4 flex items-center gap-4 hover:bg-slate-50 group">
+                  <div key={topic.id} className="px-8 py-5 flex items-center gap-6 hover:bg-slate-50 group transition-colors">
                     
                     {/* TEACHER CHECKBOX */}
                     <button 
                         onClick={() => toggleTopicStatus(topic.id, topic.status || 'todo')}
-                        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
-                            topic.status === 'complete' ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 group-hover:border-indigo-300'
+                        className={`w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all cursor-pointer ${
+                            topic.status === 'complete' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-200 group-hover:border-blue-400'
                         }`}
                         title="Mark as complete for student"
                     >
-                      <Check size={14} strokeWidth={4} />
+                      <Check size={16} strokeWidth={4} />
                     </button>
 
                     <div className="flex-grow">
-                        <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-slate-400 font-bold">{topic.id}</span>
-                            <span className={`font-medium ${topic.status === 'complete' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                        <div className="flex items-center gap-3">
+                            <span className="font-black text-xs text-slate-300 uppercase tracking-tighter w-8">{topic.id}</span>
+                            <span className={`font-bold text-base transition-all ${topic.status === 'complete' ? 'text-slate-300 line-through' : 'text-slate-700'}`}>
                                 {topic.title}
                             </span>
                         </div>
                     </div>
 
                     {/* Resources Icons (Read Only) */}
-                    <div className="flex items-center gap-2 opacity-50">
-                        {topic.has_video && <Video size={16} className="text-slate-400" />}
-                        {topic.has_questions && <FileQuestion size={16} className="text-slate-400" />}
+                    <div className="flex items-center gap-3">
+                        {topic.has_video && <Video size={18} className="text-slate-300" />}
+                        {topic.has_questions && <FileQuestion size={18} className="text-slate-300" />}
                     </div>
 
                   </div>

@@ -27,7 +27,7 @@ export default function Home() {
           </h1>
           
           <p className="text-xl text-slate-600 max-w-lg mx-auto md:mx-0 leading-relaxed">
-            Specialising in Physics, Chemistry, and Maths. I help students achieve grade jumps they didn't think were possible.
+            Focus on clear explanations, deep understanding, and confidence to tackle the hardest problems.
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start pt-2">

@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "EB Tutors",
-  description: "Personalised Tuition for GCSE & A-Level",
+  description: "Elite Physics & Maths Tuition | St John's College, Cambridge",
 };
 
 export default function RootLayout({

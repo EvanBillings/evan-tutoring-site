@@ -1,90 +1,155 @@
 "use client";
 
-import { useUser, UserButton } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { BookOpen, Calendar, Award, ArrowRight } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { 
+  ArrowLeft, Check, Video, FileQuestion, 
+  ShieldAlert, User, BarChart3
+} from "lucide-react";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// --- TYPES ---
+type Topic = {
+  id: string;
+  module_id: number;
+  title: string;
+  has_video: boolean;
+  has_questions: boolean;
+  status: 'todo' | 'complete';
+};
 
-export default function Dashboard() {
-  const { user, isLoaded } = useUser();
-  const [rate, setRate] = useState<number | null>(null);
+type Module = {
+  id: number;
+  title: string;
+  topics: Topic[];
+};
+
+export default function StudentDetail({ params }: { params: Promise<{ email: string }> }) {
+  // Unwrapping params for Next.js 15
+  const resolvedParams = use(params);
+  const targetEmail = decodeURIComponent(resolvedParams.email);
+  
+  const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchProfile() {
-      if (!isLoaded || !user) return;
-      const { data } = await supabase
-        .from("student_profiles")
-        .select("hourly_rate")
-        .eq("id", user.id)
-        .maybeSingle();
-      
-      if (data) setRate(data.hourly_rate);
-      setLoading(false);
+    async function fetchData() {
+      if (!targetEmail) return;
+      try {
+        setLoading(true);
+        // A. Get curriculum
+        const { data: mods } = await supabase.from('modules').select('*').order('order_index');
+        const { data: tops } = await supabase.from('topics').select('*');
+        // B. Get student progress
+        const { data: prog } = await supabase.from('progress').select('*').eq('student_email', targetEmail);
+
+        const merged = (mods || []).map(m => ({
+          ...m,
+          topics: (tops || []).filter(t => t.module_id === m.id).map(t => ({
+            ...t,
+            status: prog?.find(p => p.topic_id === t.id)?.status || 'todo'
+          }))
+        }));
+        setModules(merged);
+      } finally {
+        setLoading(false);
+      }
     }
-    fetchProfile();
-  }, [user, isLoaded]);
+    fetchData();
+  }, [targetEmail]);
+
+  const toggleStatus = async (topicId: string, current: string) => {
+    const next = current === 'complete' ? 'todo' : 'complete';
+    
+    // Optimistic UI Update
+    setModules(prev => prev.map(m => ({
+      ...m,
+      topics: m.topics.map(t => t.id === topicId ? { ...t, status: next as 'todo' | 'complete' } : t)
+    })));
+
+    // Sync to Database
+    await supabase.from('progress').upsert({ 
+      student_email: targetEmail, 
+      topic_id: topicId, 
+      status: next 
+    }, { onConflict: 'student_email, topic_id' });
+  };
+
+  if (loading) return <div className="p-20 text-center font-black text-slate-300">Syncing Student Data...</div>;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
-      <nav className="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="bg-slate-900 text-white w-10 h-10 flex items-center justify-center rounded-xl font-black text-lg shadow-md">
-            EB
-          </div>
-          <h1 className="text-xl font-black text-slate-900 tracking-tight">EB Tutors</h1>
+    <div className="min-h-screen bg-[#F8FAFC] font-sans pb-20">
+      {/* ADMIN OVERLAY HEADER */}
+      <div className="bg-amber-50 border-b border-amber-200 px-8 py-3 flex justify-between items-center sticky top-0 z-50">
+        <div className="flex items-center gap-2 text-amber-700 font-black text-xs uppercase tracking-widest">
+          <ShieldAlert size={16} /> EB Admin • Editing Mode • {targetEmail}
         </div>
-        <div className="flex items-center gap-6">
-          <Link href="/dashboard/book" className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">Book Session</Link>
-          <UserButton afterSignOutUrl="/" />
-        </div>
-      </nav>
+        <Link href="/admin" className="text-amber-700 font-black text-xs no-underline flex items-center gap-2 hover:opacity-70">
+          <ArrowLeft size={16} /> Exit Editor
+        </Link>
+      </div>
 
-      <main className="max-w-6xl mx-auto p-8">
-        <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div>
-            <h2 className="text-4xl font-black text-slate-900 tracking-tight">Welcome, {user?.firstName}!</h2>
-            <p className="text-slate-500 mt-2 font-medium italic">Cambridge Natural Sciences • EB Tutors</p>
-          </div>
-          
-          <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm flex items-center gap-8">
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Your Personal Rate</p>
-              <p className="text-3xl font-black text-slate-900">
-                £{loading ? "..." : rate || "40"}
-                <span className="text-sm font-bold text-slate-400">/hr</span>
-              </p>
+      <div className="max-w-4xl mx-auto p-10">
+        {/* STUDENT HEADER */}
+        <div className="flex items-center gap-6 mb-12">
+            <div className="w-20 h-20 bg-slate-900 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl italic font-black text-3xl">
+                {targetEmail[0].toUpperCase()}
             </div>
-            <Link href="/dashboard/book" className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center gap-2">
-              Book Now <ArrowRight size={16} />
-            </Link>
-          </div>
-        </header>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 flex flex-col items-center text-center">
-            <div className="bg-blue-50 text-blue-600 p-4 rounded-2xl mb-4"><BookOpen /></div>
-            <h3 className="font-bold text-slate-900">Course Materials</h3>
-            <p className="text-xs text-slate-400 mt-2">Access specialized Physics & Maths notes.</p>
-          </div>
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 flex flex-col items-center text-center opacity-40">
-            <div className="bg-slate-50 text-slate-600 p-4 rounded-2xl mb-4"><Calendar /></div>
-            <h3 className="font-bold text-slate-900">Upcoming Sessions</h3>
-            <p className="text-xs text-slate-400 mt-2">Scheduling panel coming soon.</p>
-          </div>
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 flex flex-col items-center text-center opacity-40">
-            <div className="bg-slate-50 text-slate-600 p-4 rounded-2xl mb-4"><Award /></div>
-            <h3 className="font-bold text-slate-900">Quiz Progress</h3>
-            <p className="text-xs text-slate-400 mt-2">Track your mastery of each topic.</p>
-          </div>
+            <div>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight m-0">
+                  {targetEmail.split('@')[0]}
+                </h1>
+                <p className="text-slate-400 font-bold m-0 mt-1 uppercase text-xs tracking-widest">Mastery Tracker</p>
+            </div>
         </div>
-      </main>
+
+        {/* TRACKER LIST */}
+        <div className="space-y-8">
+          {modules.map((mod) => (
+            <div key={mod.id} className="bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
+              <div className="bg-slate-50 px-8 py-6 border-b border-slate-200 flex justify-between items-center">
+                <h3 className="font-black text-xl text-slate-900 m-0 tracking-tight">{mod.title}</h3>
+                <div className="flex items-center gap-4">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {Math.round((mod.topics.filter(t => t.status === 'complete').length / mod.topics.length) * 100)}%
+                  </span>
+                  <div className="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-600 transition-all duration-700" 
+                      style={{ width: `${(mod.topics.filter(t => t.status === 'complete').length / mod.topics.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="divide-y divide-slate-50">
+                {mod.topics.map((topic) => (
+                  <div key={topic.id} className="px-8 py-5 flex items-center gap-6 group hover:bg-slate-50 transition-colors">
+                    {/* MASTER TOGGLE */}
+                    <button 
+                      onClick={() => toggleStatus(topic.id, topic.status)}
+                      className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all cursor-pointer ${
+                        topic.status === 'complete' ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-white border-slate-200'
+                      }`}
+                    >
+                      <Check size={16} strokeWidth={4} />
+                    </button>
+                    
+                    <span className={`flex-grow font-bold text-lg transition-all ${topic.status === 'complete' ? 'text-slate-300 line-through' : 'text-slate-700'}`}>
+                      {topic.title}
+                    </span>
+
+                    <div className="flex gap-3 opacity-20 group-hover:opacity-100 transition-opacity">
+                      {topic.has_video && <Video size={18} className="text-slate-400" />}
+                      {topic.has_questions && <FileQuestion size={18} className="text-slate-400" />}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
