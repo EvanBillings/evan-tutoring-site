@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Evan Billings Tutoring",
-  description: "Personalised Tuition for GCSE & A-Level",
+  title: "EB Tutors",
+  description: "Elite Physics & Maths Tuition | Cambridge Natural Sciences",
 };
 
 export default function RootLayout({
@@ -28,7 +28,6 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en">
         <body
-          // CHANGE: We added 'geistSans.className' which forces the font to appear
           className={`${geistSans.className} ${geistMono.variable} antialiased`}
         >
           <Navbar />
