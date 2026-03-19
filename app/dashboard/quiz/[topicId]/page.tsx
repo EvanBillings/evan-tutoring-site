@@ -1,270 +1,249 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation"; 
-import { useUser } from "@clerk/nextjs";
-import { supabase } from "@/lib/supabase";
-import Link from "next/link";
-import { ArrowLeft, CheckCircle, XCircle, RefreshCw, ChevronRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useUser, UserButton } from "@clerk/nextjs";
+import { createClient } from "@supabase/supabase-js";
+import Latex from "react-latex-next";
+import "katex/dist/katex.min.css";
 
-// --- MATH & STYLE IMPORTS ---
-import 'katex/dist/katex.min.css';
-import Latex from 'react-latex-next';
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 type Question = {
-  id: string;
-  question: string;
-  image_url?: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
-  correct_answer: 'a' | 'b' | 'c' | 'd';
-  explanation?: string;
+  id: number;
+  question_text: string;
+  options: string[];
+  correct_answer: string;
+  explanation: string;
 };
 
-export default function QuizPage() {
+export default function ReviewPage() {
   const { topicId } = useParams();
+  const router = useRouter();
   const { user } = useUser();
 
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  // Quiz State
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [score, setScore] = useState(0);
-  const [showResults, setShowResults] = useState(false);
+  const [currentQIndex, setCurrentQIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [isAnswered, setIsAnswered] = useState(false);
-  const [finalPercentage, setFinalPercentage] = useState(0);
-  
-  // NEW: Track User History
-  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [score, setScore] = useState(0);
+  const [quizFinished, setQuizFinished] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // 1. Fetch Questions
+  // Debugging Tag
   useEffect(() => {
-    async function fetchQuiz() {
-      const { data } = await supabase
-        .from('quiz_questions')
-        .select('*')
-        .eq('topic_id', topicId);
-      
-      if (data && data.length > 0) {
-        setQuestions(data.sort(() => Math.random() - 0.5));
-      }
-      setLoading(false);
-    }
-    fetchQuiz();
+    console.log("Loaded Review Page: VERSION FINAL_V3 (Styled)");
+  }, []);
+
+  // 1. Load Questions
+  useEffect(() => {
+    const mockQuestions = [
+      {
+        id: 1,
+        question_text: "What is the unit of Force?",
+        options: ["Joules", "Newtons", "Watts", "Amps"],
+        correct_answer: "Newtons",
+        explanation: "Force is measured in Newtons (N).",
+      },
+      {
+        id: 2,
+        question_text: "Which formula represents Newton's Second Law?",
+        options: ["$F = ma$", "$E = mc^2$", "$V = IR$", "$P = IV$"],
+        correct_answer: "$F = ma$",
+        explanation: "Newton's Second Law states that Force equals mass times acceleration.",
+      },
+    ];
+    setQuestions(mockQuestions);
+    setLoading(false);
   }, [topicId]);
 
-  // 2. Handle Answer Click
-  const handleAnswer = (option: string) => {
-    if (isAnswered) return; // Prevent double clicking
-    
+  // 2. Handle Answer Selection
+  const handleOptionClick = (option: string) => {
+    if (showFeedback) return; 
     setSelectedOption(option);
-    setIsAnswered(true);
-
-    const currentQ = questions[currentIndex];
-    
-    // Safety check inside handler
-    if (currentQ) {
-        // Update Score
-        if (option === currentQ.correct_answer) {
-            setScore(prev => prev + 1);
-        }
-        // Save Answer to History
-        setUserAnswers(prev => ({...prev, [currentQ.id]: option}));
-    }
   };
 
-  // 3. Next Question
-  const handleNext = async () => {
-    if (currentIndex + 1 < questions.length) {
-      setCurrentIndex(currentIndex + 1);
+  // 3. Submit Answer
+  const handleSubmitAnswer = () => {
+    if (!selectedOption) return;
+    const currentQ = questions[currentQIndex];
+    if (selectedOption === currentQ.correct_answer) {
+      setScore((prev) => prev + 1);
+    }
+    setShowFeedback(true);
+  };
+
+  // 4. Next Question
+  const handleNextQuestion = async () => {
+    const nextIndex = currentQIndex + 1;
+    if (nextIndex < questions.length) {
+      setCurrentQIndex(nextIndex);
       setSelectedOption(null);
-      setIsAnswered(false);
+      setShowFeedback(false);
     } else {
-      // End of Quiz
-      finishQuiz();
+      setQuizFinished(true);
+      await saveQuizResultStrict();
     }
   };
 
-  // 4. Finish & Save (FIXED ACCURACY + HISTORY)
-  const finishQuiz = async () => {
-    if (!user?.primaryEmailAddress) return;
+  // 5. Save to Supabase
+  const saveQuizResultStrict = async () => {
+    if (!user) return;
+    try {
+      console.log("Saving result...");
+      const payload = {
+        student_email: String(user.primaryEmailAddress?.emailAddress),
+        topic_id: String(topicId),
+        score: Number(score), 
+        total_questions: Number(questions.length),
+      };
 
-    const currentQ = questions[currentIndex];
-    
-    // Safety check: if currentQ is missing, just use current score
-    const isLastCorrect = currentQ && selectedOption === currentQ.correct_answer;
-    
-    // Calculate Final Score
-    const finalRawScore = score + (isLastCorrect ? 1 : 0);
-    const percentage = questions.length > 0 ? Math.round((finalRawScore / questions.length) * 100) : 0;
+      const { data, error } = await supabase
+        .from("quiz_results")
+        .insert([payload])
+        .select();
 
-    setFinalPercentage(percentage);
-    setShowResults(true);
-    
-    const newStatus = percentage >= 70 ? 'complete' : 'review';
-
-    // SAVE TO DB (Including History)
-    await supabase.from('progress').upsert({
-      student_email: user.primaryEmailAddress.emailAddress,
-      topic_id: topicId as string,
-      status: newStatus,
-      score: percentage, 
-      history: userAnswers, // <--- SAVING HISTORY
-      is_assigned: percentage >= 70 ? false : undefined 
-    }, { onConflict: 'student_email, topic_id' });
+      if (error) console.error("Supabase Error:", error.message);
+      else console.log("Success:", data);
+    } catch (err) {
+      console.error("Unexpected error:", err);
+    }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500">Loading Quiz...</div>;
+  if (loading) return <div className="p-10 text-center text-gray-500">Loading quiz...</div>;
 
-  if (questions.length === 0) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
-      <h2 className="text-xl font-bold text-slate-700">No questions found for this topic yet!</h2>
-      <Link href="/dashboard" className="text-blue-600 hover:underline">Return to Dashboard</Link>
-    </div>
-  );
-
-  // --- RESULTS SCREEN ---
-  if (showResults) {
-    const passed = finalPercentage >= 70;
-
+  // ---------------------------------------------------------
+  // Render: Quiz Finished
+  // ---------------------------------------------------------
+  if (quizFinished) {
+    const finalPercentage = Math.round((score / questions.length) * 100);
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans text-slate-900">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-slate-200">
-          <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-6 ${passed ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
-            {passed ? <CheckCircle size={40} /> : <RefreshCw size={40} />}
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white p-10 rounded-2xl shadow-lg border max-w-lg w-full text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Quiz Complete!</h2>
+          <p className="text-gray-500 mb-6">Great effort on this topic.</p>
+          
+          <div className="text-6xl font-black text-blue-600 mb-6">
+            {finalPercentage}%
           </div>
           
-          <h1 className="text-2xl font-black text-slate-900 mb-2">{passed ? "Great Job!" : "Keep Practicing"}</h1>
-          <p className="text-slate-500 mb-6">You scored {finalPercentage}% on this topic.</p>
+          <p className="text-gray-700 text-lg mb-8 bg-gray-100 py-3 rounded-lg">
+            You scored <strong>{score}</strong> out of <strong>{questions.length}</strong>
+          </p>
           
-          <div className="text-4xl font-black text-slate-800 mb-8">
-            {finalPercentage}% <span className="text-base text-slate-400 font-medium font-sans">Score</span>
-          </div>
-
-          <div className="space-y-3">
-             {/* NEW: Review Button */}
-             <Link href={`/dashboard/review/${topicId}`}>
-                <button className="w-full py-3 rounded-xl bg-blue-50 text-blue-700 font-bold hover:bg-blue-100 transition mb-3">
-                    Review Answers
-                </button>
-            </Link>
-
-            <button onClick={() => window.location.reload()} className="w-full py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition">
-              Try Again
-            </button>
-            <Link href="/dashboard" className="block w-full py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800 transition">
-              Return to Dashboard
-            </Link>
-          </div>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="w-full bg-gray-900 text-white font-bold px-6 py-4 rounded-xl hover:bg-gray-800 transition transform hover:scale-[1.02]"
+          >
+            Return to Dashboard
+          </button>
         </div>
       </div>
     );
   }
 
-  // --- QUIZ INTERFACE ---
-  const currentQ = questions[currentIndex];
-
-  if (!currentQ) return <div className="min-h-screen flex items-center justify-center">Loading Question...</div>;
+  // ---------------------------------------------------------
+  // Render: Question Screen
+  // ---------------------------------------------------------
+  const currentQ = questions[currentQIndex];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center py-10 px-4 font-sans text-slate-900">
-      
-      {/* Top Bar */}
-      <div className="w-full max-w-2xl flex justify-between items-center mb-8">
-        <Link href="/dashboard" className="text-slate-400 hover:text-slate-700 transition">
-          <ArrowLeft />
-        </Link>
-        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            Topic {topicId} • Q{currentIndex + 1}/{questions.length}
-        </div>
-        <div className="w-6"></div> 
-      </div>
-
-      {/* Progress Bar */}
-      <div className="w-full max-w-2xl h-2 bg-slate-200 rounded-full mb-8 overflow-hidden">
-        <div 
-            className="h-full bg-blue-600 transition-all duration-500" 
-            style={{ width: `${((currentIndex) / questions.length) * 100}%` }}
-        ></div>
-      </div>
-
-      {/* Question Card */}
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-10">
+    <div className="min-h-screen bg-gray-50 p-6 flex flex-col items-center">
+      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
         
-        {/* IMAGE */}
-        {currentQ.image_url && (
-            <div className="mb-6 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex justify-center">
-                <img 
-                    src={currentQ.image_url} 
-                    alt="Question Diagram" 
-                    className="w-full h-auto max-h-64 object-contain"
-                />
-            </div>
-        )}
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8 border-b border-gray-100 pb-4">
+          <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            Question {currentQIndex + 1} / {questions.length}
+          </span>
+          <div className="transform scale-90 origin-right">
+             <UserButton />
+          </div>
+        </div>
 
-        {/* QUESTION TEXT */}
-        <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-8 leading-relaxed">
-          <Latex>{currentQ.question}</Latex>
+        {/* Question Text */}
+        <h2 className="text-2xl font-bold text-gray-900 mb-8 leading-snug">
+          <Latex>{currentQ.question_text}</Latex>
         </h2>
 
-        <div className="space-y-3">
-          {['a', 'b', 'c', 'd'].map((optKey) => {
-            const isSelected = selectedOption === optKey;
-            const isCorrect = currentQ.correct_answer === optKey;
+        {/* Options Grid */}
+        <div className="space-y-3 mb-8">
+          {currentQ.options.map((option, idx) => {
+            const isSelected = selectedOption === option;
+            const isCorrect = option === currentQ.correct_answer;
             
-            let styleClass = "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-blue-300"; 
+            // --- STYLING LOGIC FIXED HERE ---
+            let buttonStyle = "bg-white text-gray-700 border-gray-200 hover:border-blue-500 hover:bg-blue-50";
             
-            if (isAnswered) {
-                if (isCorrect) styleClass = "bg-green-50 border-green-500 text-green-800 font-bold";
-                else if (isSelected && !isCorrect) styleClass = "bg-red-50 border-red-500 text-red-800";
-                else styleClass = "bg-white border-slate-100 text-slate-300 opacity-50"; 
+            if (showFeedback) {
+              if (isCorrect) {
+                // Green for correct
+                buttonStyle = "bg-green-100 border-green-500 text-green-900 font-bold";
+              } else if (isSelected && !isCorrect) {
+                // Red for wrong
+                buttonStyle = "bg-red-100 border-red-500 text-red-900 font-bold";
+              } else {
+                // Faded for others
+                buttonStyle = "bg-white border-gray-100 text-gray-400 opacity-60";
+              }
             } else if (isSelected) {
-                styleClass = "bg-blue-50 border-blue-500 text-blue-900 ring-1 ring-blue-500";
+              // Blue for selected
+              buttonStyle = "bg-blue-50 border-blue-600 text-blue-900 ring-1 ring-blue-600 font-semibold";
             }
 
             return (
               <button
-                key={optKey}
-                onClick={() => handleAnswer(optKey)}
-                disabled={isAnswered}
-                className={`w-full text-left p-4 rounded-xl border-2 text-base transition-all duration-200 flex justify-between items-center ${styleClass}`}
+                key={idx}
+                onClick={() => handleOptionClick(option)}
+                disabled={showFeedback}
+                className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${buttonStyle}`}
               >
-                <span className="flex items-center gap-4">
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold uppercase shrink-0 ${
-                        isAnswered && isCorrect ? 'bg-green-200 text-green-700' : 
-                        isSelected ? 'bg-blue-200 text-blue-700' :
-                        'bg-slate-100 text-slate-500'
-                    }`}>
-                        {optKey}
-                    </span>
-                    {/* Render Option with Latex too */}
-                    {/* @ts-ignore */}
-                    <span><Latex>{currentQ[`option_${optKey}`]}</Latex></span>
-                </span>
-                
-                {isAnswered && isCorrect && <CheckCircle size={20} className="text-green-600 shrink-0" />}
-                {isAnswered && isSelected && !isCorrect && <XCircle size={20} className="text-red-500 shrink-0" />}
+                <span className="text-lg"><Latex>{option}</Latex></span>
               </button>
             );
           })}
         </div>
-        
-        {/* Next Button */}
-        {isAnswered && (
-            <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end animate-in fade-in slide-in-from-bottom-2">
-                <button 
-                    onClick={handleNext}
-                    className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-800 transition flex items-center gap-2 shadow-lg shadow-slate-200"
-                >
-                    {currentIndex + 1 === questions.length ? "Finish Quiz" : "Next Question"} <ChevronRight size={18} />
-                </button>
+
+        {/* Feedback Box */}
+        {showFeedback && (
+          <div className={`p-5 rounded-xl mb-6 flex items-start gap-3 ${
+            selectedOption === currentQ.correct_answer 
+              ? "bg-green-50 border border-green-200 text-green-900" 
+              : "bg-red-50 border border-red-200 text-red-900"
+          }`}>
+            <div className="text-xl">
+              {selectedOption === currentQ.correct_answer ? "✅" : "❌"}
             </div>
+            <div>
+              <p className="font-bold mb-1">
+                {selectedOption === currentQ.correct_answer ? "Correct!" : "Incorrect"}
+              </p>
+              <p className="text-sm opacity-90 leading-relaxed">
+                <Latex>{currentQ.explanation}</Latex>
+              </p>
+            </div>
+          </div>
         )}
 
+        {/* Action Button */}
+        <button
+          onClick={showFeedback ? handleNextQuestion : handleSubmitAnswer}
+          disabled={!selectedOption}
+          className={`w-full py-4 rounded-xl font-bold text-lg transition-all transform active:scale-[0.99] ${
+            !selectedOption
+              ? "bg-gray-100 text-gray-300 cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg"
+          }`}
+        >
+          {showFeedback
+            ? currentQIndex === questions.length - 1
+              ? "Finish Quiz"
+              : "Next Question"
+            : "Submit Answer"}
+        </button>
       </div>
     </div>
   );
