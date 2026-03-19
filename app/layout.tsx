@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "EB Tutors",
-  description: "Elite Physics & Maths Tuition | Cambridge Natural Sciences",
+  description: "Personalised Tuition for GCSE & A-Level",
 };
 
 export default function RootLayout({
@@ -27,9 +27,7 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en">
-        <body
-          className={`${geistSans.className} ${geistMono.variable} antialiased`}
-        >
+        <body className={`${geistSans.className} ${geistMono.variable} antialiased`}>
           <Navbar />
           {children}
         </body>

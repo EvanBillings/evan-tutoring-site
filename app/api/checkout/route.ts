@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  // This must match your package.json version exactly to pass the Vercel build
-  apiVersion: "2026-02-25.clover", 
+  apiVersion: "2026-02-25.clover", // MUST be this exact string
 });
 
 const supabase = createClient(
@@ -32,7 +31,7 @@ export async function POST(req: Request) {
             currency: "gbp",
             product_data: {
               name: "EB Tutors - 1-Hour Session",
-              description: `Physics & Maths Tutoring for ${userEmail}`,
+              description: `Tutoring for ${userEmail}`,
             },
             unit_amount: profile.hourly_rate * 100,
           },
