@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle, Calendar, ArrowRight, PartyPopper } from "lucide-react";
-
+export const dynamic = 'force-dynamic';
 export default function BookingSuccess() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
