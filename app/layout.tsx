@@ -6,8 +6,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "EB Tutors | Physics & Maths",
-  description: "Expert tutoring from Cambridge Natural Sciences.",
+  title: "EB Tutors | Cambridge Physics & Maths",
+  description: "Expert tutoring from St John's College, Cambridge.",
 };
 
 export default function RootLayout({

@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-// @ts-ignore: Bypassing version check to fix Vercel build mismatch
+// Initialize Stripe. For v20+, it is best to let the SDK handle 
+// the versioning unless you have a specific requirement.
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-02-25.clover" as any,
+  apiVersion: "2026-02-25.clover" as any, 
 });
 
 export async function POST(req: Request) {
   try {
     const { email, rate, userId } = await req.json();
+
+    // Use the environment variable for the base URL to avoid 'localhost' errors
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://www.evanbillings.com";
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -17,7 +21,7 @@ export async function POST(req: Request) {
           price_data: {
             currency: "gbp",
             product_data: {
-              name: "EB Tutors - 1-Hour Lesson",
+              name: "EB Tutors - 1-Hour Lesson Credit",
               description: `Tutoring for ${email}`,
             },
             unit_amount: rate * 100, 
@@ -26,15 +30,15 @@ export async function POST(req: Request) {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?payment=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/book`,
+      success_url: `${baseUrl}/dashboard?payment=success`,
+      cancel_url: `${baseUrl}/book`,
       customer_email: email,
       metadata: { userId, email, type: "lesson_topup" },
     });
 
     return NextResponse.json({ url: session.url });
   } catch (err: any) {
-    console.error("Stripe Checkout Error:", err);
+    console.error("Stripe Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
