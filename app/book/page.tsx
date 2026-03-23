@@ -18,7 +18,6 @@ export default function BookingPage() {
     try {
       const { data, error } = await supabase
         .from("student_profiles")
-        .from("student_profiles")
         .select("*")
         .eq("email", user.primaryEmailAddress.emailAddress)
         .maybeSingle(); // maybeSingle prevents errors if profile doesn't exist yet
