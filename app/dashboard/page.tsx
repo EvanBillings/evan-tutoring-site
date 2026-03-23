@@ -12,11 +12,9 @@ import {
   Star, 
   Clock, 
   Loader2, 
-  GraduationCap, 
   CreditCard 
 } from "lucide-react";
 
-// Initialize Supabase
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -34,10 +32,8 @@ export default function StudentDashboard() {
 
     const userEmail = user.primaryEmailAddress?.emailAddress.toLowerCase().trim();
 
-    // 1. Initial Load
     fetchProfile();
 
-    // 2. Realtime Sync: Listens for Evan's updates in the Teacher Hub
     const channel = supabase
       .channel(`sync-${userEmail}`)
       .on(
@@ -49,7 +45,6 @@ export default function StudentDashboard() {
           filter: `email=eq.${userEmail}`,
         },
         (payload) => {
-          console.log("⚡ Realtime Sync: Rate updated to", payload.new.hourly_rate);
           setProfile(payload.new);
         }
       )
@@ -80,15 +75,12 @@ export default function StudentDashboard() {
     );
   }
 
-  // FIX: Explicitly check that rate is not the default. 
-  // We use "Number" to ensure we aren't comparing strings vs numbers.
   const isApproved = profile && Number(profile.hourly_rate) !== DEFAULT_WAITLIST_RATE;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans">
       <main className="max-w-6xl mx-auto p-8">
         
-        {/* WELCOME HEADER */}
         <div className="mb-10">
           <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
             Welcome, <span className="text-blue-600">{user?.firstName || "Student"}</span>
@@ -101,7 +93,6 @@ export default function StudentDashboard() {
           <div className="lg:col-span-3 space-y-8">
             
             {!isApproved ? (
-              /* --- PENDING APPROVAL STATE --- */
               <div className="bg-white border-2 border-dashed border-slate-200 rounded-[2.5rem] p-12 text-center shadow-sm">
                 <div className="bg-amber-100 text-amber-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6">
                     <Clock size={32} />
@@ -113,7 +104,6 @@ export default function StudentDashboard() {
                 </p>
               </div>
             ) : (
-              /* --- ACTIVE ACCOUNT STATE --- */
               <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl shadow-blue-200 relative overflow-hidden group">
                 <div className="relative z-10">
                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-6">Active Account</div>
@@ -137,7 +127,6 @@ export default function StudentDashboard() {
               </div>
             )}
 
-            {/* ACTION GRID */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <ActionCard href="/curriculum" icon={<BookOpen size={24}/>} title="Course Material" desc="Notes & tracking." />
                 <ActionCard href="/dashboard/payments" icon={<CreditCard size={24}/>} title="Billing" desc="Receipts & top-ups." />
@@ -151,24 +140,13 @@ export default function StudentDashboard() {
                 <h3 className="font-black text-slate-900 mb-6 flex items-center gap-2 uppercase text-[10px] tracking-widest">
                     <Star size={14} className="text-blue-600" fill="currentColor" /> Account Details
                 </h3>
-                <div className="space-y-6">
-                    <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Your Rate</p>
-                        <div className="flex items-baseline gap-0.5">
-                            <span className="text-2xl font-black text-slate-900 tracking-tighter">
-                                {/* FIX: Explicitly check for 0 so it doesn't fall back to "Awaiting Review" */}
-                                {isApproved || profile?.hourly_rate === 0 ? `£${profile.hourly_rate}` : "Awaiting Review"}
-                            </span>
-                            {(isApproved || profile?.hourly_rate === 0) && <span className="text-sm font-black text-slate-400 tracking-tighter">/hr</span>}
-                        </div>
-                    </div>
-                    
-                    <div className="pt-6 border-t border-slate-100 flex items-center gap-3">
-                        <GraduationCap size={18} className="text-blue-600" />
-                        <div>
-                          <p className="text-[10px] font-black text-slate-900 uppercase">St John's College</p>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest text-nowrap">Cambridge University</p>
-                        </div>
+                <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Your Rate</p>
+                    <div className="flex items-baseline gap-0.5">
+                        <span className="text-2xl font-black text-slate-900 tracking-tighter">
+                            {isApproved || profile?.hourly_rate === 0 ? `£${profile.hourly_rate}` : "Awaiting Review"}
+                        </span>
+                        {(isApproved || profile?.hourly_rate === 0) && <span className="text-sm font-black text-slate-400 tracking-tighter">/hr</span>}
                     </div>
                 </div>
             </div>
