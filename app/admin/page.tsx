@@ -1,12 +1,11 @@
 "use client";
 
-import { useUser, UserButton } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { 
-  BookOpen, Users, GraduationCap, ArrowRight, 
-  BarChart3, Plus, Settings, CreditCard, Search
+  Users, CreditCard, BookOpen, GraduationCap, 
+  Search, BookText, PlusSquare, BarChart3, Loader2 
 } from "lucide-react";
 
 const supabase = createClient(
@@ -14,173 +13,170 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export default function AdminHub() {
-  const { user, isLoaded } = useUser();
+export default function AdminDashboard() {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-
-  const isAdmin = user?.primaryEmailAddress?.emailAddress === "evancbillings@gmail.com";
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    if (isAdmin) fetchAdminData();
-  }, [isAdmin]);
+    fetchData();
+  }, []);
 
-  async function fetchAdminData() {
-    const { data: profiles } = await supabase
-      .from("student_profiles")
-      .select("*")
-      .order('full_name', { ascending: true });
-    
-    setStudents(profiles || []);
+  async function fetchData() {
+    setLoading(true);
+    const { data } = await supabase.from("student_profiles").select("*").order('full_name');
+    if (data) setStudents(data);
     setLoading(false);
   }
 
+  // UPDATED: Reliable rate update with console logging
   async function updateRate(id: string, newRate: number) {
-    await supabase.from("student_profiles").update({ hourly_rate: newRate }).eq("id", id);
-    fetchAdminData();
+    const rateToSave = Number(newRate);
+    
+    // 1. Optimistic Update (UI changes immediately)
+    setStudents(prev => prev.map(s => s.id === id ? { ...s, hourly_rate: rateToSave } : s));
+
+    // 2. Database Save
+    const { error } = await supabase
+      .from("student_profiles")
+      .update({ hourly_rate: rateToSave })
+      .eq("id", id);
+
+    if (error) {
+      console.error("❌ DB Update Failed:", error.message);
+    } else {
+      console.log(`✅ DB Update Success: ID ${id} is now £${rateToSave}`);
+    }
   }
 
-  if (!isLoaded || loading) return <div className="min-h-screen flex items-center justify-center font-bold text-slate-400">Initialising Teacher Hub...</div>;
-  if (!isAdmin) return <div className="min-h-screen flex items-center justify-center text-red-500 font-bold">Unauthorized Access</div>;
-
   const filteredStudents = students.filter(s => 
-    s.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    s.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    s.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const avgRate = students.length > 0 
+    ? Math.round(students.reduce((acc, curr) => acc + (curr.hourly_rate || 0), 0) / students.length) 
+    : 0;
+
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans">
-      
-      {/* GLOBAL HEADER */}
-      <nav className="bg-white border-b border-slate-200 px-8 py-4 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="bg-slate-900 text-white p-2 rounded-lg"><Settings size={20}/></div>
-            <h1 className="text-xl font-bold tracking-tight">Teacher Hub</h1>
-          </div>
-          <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="text-sm font-bold text-slate-500 hover:text-blue-600 transition">View Student Portal</Link>
-            <UserButton />
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto p-8">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans pb-20">
+      <div className="max-w-7xl mx-auto p-8">
         
-        {/* TOP STATS */}
+        {/* Page Title Section */}
+        <div className="mb-10">
+          <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">Teacher Hub</h1>
+          <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em] mt-1">Management & Administration</p>
+        </div>
+        
+        {/* Top Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-          <StatCard icon={<Users/>} label="Total Students" value={students.length} color="blue" />
-          <StatCard icon={<CreditCard/>} label="Avg. Rate" value={`£${Math.round(students.reduce((acc, curr) => acc + curr.hourly_rate, 0) / students.length)}`} color="emerald" />
-          <StatCard icon={<BookOpen/>} label="Active Modules" value="4" color="indigo" />
-          <StatCard icon={<GraduationCap/>} label="Predicted 9s" value="6" color="amber" />
+          <StatCard icon={<Users size={24} />} val={students.length} label="Total Students" color="bg-blue-50 text-blue-600" />
+          <StatCard icon={<CreditCard size={24} />} val={`£${avgRate}`} label="Avg. Rate" color="bg-emerald-50 text-emerald-600" />
+          <StatCard icon={<BookOpen size={24} />} val="4" label="Active Modules" color="bg-indigo-50 text-indigo-600" />
+          <StatCard icon={<GraduationCap size={24} />} val="6" label="Predicted 9s" color="bg-amber-50 text-amber-600" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           
-          {/* LEFT: STUDENT MANAGEMENT */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
-                <h2 className="font-bold text-lg text-slate-800">Student Roster</h2>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input 
-                    type="text" 
-                    placeholder="Search students..." 
-                    className="pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 transition-all w-64"
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+          {/* Left Column: Student Roster (Now wider) */}
+          <div className="lg:col-span-3 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center">
+              <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase">Student Roster</h2>
+              <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-200 focus-within:border-blue-400 transition-colors">
+                <Search size={16} className="text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Search students..." 
+                  className="bg-transparent border-none text-sm outline-none font-bold text-slate-700 w-48"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                      <th className="px-8 py-4">Student Details</th>
-                      <th className="px-8 py-4">Hourly Rate</th>
-                      <th className="px-8 py-4 text-right">Settings</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {filteredStudents.map((s) => (
-                      <tr key={s.id} className="group hover:bg-slate-50/50 transition-colors">
-                        <td className="px-8 py-5">
-                          <div className="font-bold text-slate-700">{s.full_name || "New Student"}</div>
-                          <div className="text-xs text-slate-400 font-medium">{s.email}</div>
-                        </td>
-                        <td className="px-8 py-5">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 font-bold text-sm">
-                            £{s.hourly_rate}
-                          </span>
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <select 
-                            onChange={(e) => updateRate(s.id, parseInt(e.target.value))}
-                            className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-600 outline-none focus:border-blue-500 transition-all"
-                            value={s.hourly_rate}
-                          >
-                            {[30, 35, 40, 45, 50, 55, 60, 65, 70, 80].map(r => (
-                              <option key={r} value={r}>£{r}/hr</option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            </div>
+
+            <div className="p-8">
+              <div className="flex text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 px-4">
+                <div className="flex-1">Student Details</div>
+                <div className="w-32 text-center">Hourly Rate</div>
+                <div className="w-24 text-right">Settings</div>
+              </div>
+
+              <div className="space-y-2">
+                {loading ? (
+                  <div className="flex flex-col items-center p-12 gap-2 text-slate-400">
+                    <Loader2 className="animate-spin text-blue-600" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Fetching Roster</span>
+                  </div>
+                ) : filteredStudents.map((student) => (
+                  <div key={student.id} className="flex items-center justify-between p-4 hover:bg-slate-50/50 rounded-2xl transition-all group border border-transparent hover:border-slate-100">
+                    <div className="flex-1">
+                      <h3 className="font-black text-slate-900 leading-none tracking-tight">{student.full_name || "New Student"}</h3>
+                      <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wide mt-1.5">{student.email}</p>
+                    </div>
+                    
+                    {/* FIXED INPUT STYLE */}
+                    <div className="w-32 flex justify-center">
+                      <div className="flex items-center gap-0.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+                        <span className="text-slate-900 font-black text-sm">£</span>
+                        <input 
+                          type="number" 
+                          min="0"
+                          value={student.hourly_rate}
+                          onChange={(e) => updateRate(student.id, Number(e.target.value))}
+                          className="w-10 bg-transparent border-none outline-none text-center font-black text-slate-900 p-0 text-sm tracking-tighter"
+                        />
+                        <span className="text-slate-400 font-black text-[10px] tracking-tighter uppercase">/hr</span>
+                      </div>
+                    </div>
+
+                    <div className="w-24 text-right">
+                       <Link 
+                          href={`/admin/student/${encodeURIComponent(student.email)}`}
+                          className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                        >
+                          Tracker
+                        </Link>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* RIGHT: QUICK TOOLS */}
-          <div className="space-y-6">
-            <h2 className="font-bold text-slate-800 px-2 text-sm uppercase tracking-widest">Management Tools</h2>
-            <ToolLink href="/admin/curriculum" icon={<BookOpen/>} title="Curriculum" desc="Update syllabus points and LaTeX content." color="blue" />
-            <ToolLink href="/admin/questions" icon={<Plus/>} title="Question Factory" desc="Add MCQ or 6-marker questions instantly." color="amber" />
-            <ToolLink href="/admin/analytics" icon={<BarChart3/>} title="Performance" desc="View student grades and heatmaps." color="emerald" />
+          {/* Right Column: Management Tools */}
+          <div className="lg:col-span-1 space-y-4">
+            <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 mb-4">Management</h2>
+            <ToolCard icon={<BookText size={20}/>} title="Curriculum" desc="Update syllabus points." />
+            <ToolCard icon={<PlusSquare size={20}/>} title="Factory" desc="Add MCQ questions." />
+            <ToolCard icon={<BarChart3 size={20}/>} title="Grades" desc="View student heatmaps." />
           </div>
 
         </div>
-      </main>
-    </div>
-  );
-}
-
-// HELPER COMPONENTS
-function StatCard({ icon, label, value, color }: any) {
-  const colors: any = {
-    blue: "bg-blue-50 text-blue-600",
-    emerald: "bg-emerald-50 text-emerald-600",
-    indigo: "bg-indigo-50 text-indigo-600",
-    amber: "bg-amber-50 text-amber-600"
-  };
-  return (
-    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5 transition-transform hover:scale-[1.02]">
-      <div className={`${colors[color]} p-3 rounded-xl`}>{icon}</div>
-      <div>
-        <div className="text-2xl font-black text-slate-800">{value}</div>
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</div>
       </div>
     </div>
   );
 }
 
-function ToolLink({ href, icon, title, desc, color }: any) {
-  const colors: any = {
-    blue: "group-hover:bg-blue-600 bg-blue-50 text-blue-600",
-    amber: "group-hover:bg-amber-600 bg-amber-50 text-amber-600",
-    emerald: "group-hover:bg-emerald-600 bg-emerald-50 text-emerald-600"
-  };
+function StatCard({ icon, val, label, color }: any) {
   return (
-    <Link href={href} className="group bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex items-start gap-4">
-      <div className={`${colors[color]} p-3 rounded-xl text-white transition-colors flex-shrink-0 text-current`}>
-        {icon}
-      </div>
+    <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm flex items-center gap-5 hover:border-blue-200 transition-colors">
+      <div className={`p-4 ${color} rounded-2xl shadow-sm`}>{icon}</div>
       <div>
-        <h3 className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{title}</h3>
-        <p className="text-xs text-slate-500 leading-relaxed mt-1">{desc}</p>
+        <p className="text-3xl font-black text-slate-900 leading-none tracking-tighter">{val}</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1.5">{label}</p>
       </div>
-    </Link>
-  );
+    </div>
+  )
+}
+
+function ToolCard({ icon, title, desc }: any) {
+  return (
+    <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-blue-400 transition-all cursor-pointer group shadow-blue-900/5">
+      <div className="flex items-center gap-4 mb-2">
+        <div className="p-3 bg-slate-50 text-slate-400 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-all">{icon}</div>
+        <h3 className="font-black text-slate-900 text-lg tracking-tighter m-0 uppercase">{title}</h3>
+      </div>
+      <p className="text-[10px] font-bold text-slate-400 m-0 uppercase tracking-widest leading-relaxed">{desc}</p>
+    </div>
+  )
 }

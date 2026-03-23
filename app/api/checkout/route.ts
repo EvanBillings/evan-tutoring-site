@@ -1,58 +1,45 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
+// Initialize Stripe with your Secret Key from .env
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-02-25.clover", 
+  apiVersion: "2023-10-16" as any, 
 });
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export async function POST(req: Request) {
   try {
-    const { userId, userEmail } = await req.json();
+    const { email, rate, lessonDate } = await req.json();
 
-    const { data: profile } = await supabase
-      .from("student_profiles")
-      .select("hourly_rate")
-      .eq("id", userId)
-      .single();
-
-    if (!profile) throw new Error("Profile not found");
-
-    // Handle Free Lessons (£0) - Skip Stripe to avoid 0.00 error
-    if (profile.hourly_rate === 0) {
-      return NextResponse.json({ 
-        url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?success=true&free=true` 
-      });
-    }
-
-    // Handle Paid Lessons (£1 - £100)
+    // Create a Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      line_items: [{
-        price_data: {
-          currency: "gbp",
-          product_data: {
-            name: "EB Tutors - 1-Hour Session",
-            description: "Physics & Maths Mentorship • St John's College, Cambridge",
+      line_items: [
+        {
+          price_data: {
+            currency: "gbp",
+            product_data: {
+              name: "1-to-1 Tutoring Session (EB Tutors)",
+              description: `Lesson scheduled for: ${lessonDate}`,
+            },
+            unit_amount: rate * 100, // Stripe handles currency in pence (e.g., £40 = 4000)
           },
-          unit_amount: profile.hourly_rate * 100, 
+          quantity: 1,
         },
-        quantity: 1,
-      }],
+      ],
       mode: "payment",
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/book?canceled=true`,
-      customer_email: userEmail,
-      metadata: { userId }, 
+      // Redirect back to your dashboard on success
+      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/book`,
+      customer_email: email,
+      metadata: {
+        student_email: email,
+        lesson_date: lessonDate,
+      },
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ id: session.id });
   } catch (err: any) {
+    console.error("Stripe Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

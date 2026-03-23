@@ -1,50 +1,18 @@
-"use client";
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import '../globals.css'; 
 
-import { useUser } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { ShieldAlert } from "lucide-react";
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const user = await currentUser();
+  
+  // SECURE CHECK: If it's not you, kick them out
+  const userEmail = user?.primaryEmailAddress?.emailAddress || "";
+  const isAdmin = userEmail === "evancbillings@gmail.com";
 
-// ⚠️ REPLACE THIS WITH YOUR EXACT CLERK LOGIN EMAIL
-const ADMIN_EMAIL = "evancbillings@gmail.com"; 
-
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { user, isLoaded } = useUser();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (isLoaded) {
-      const userEmail = user?.primaryEmailAddress?.emailAddress;
-      
-      // If not logged in, or logged in but NOT the admin...
-      if (!user || userEmail !== ADMIN_EMAIL) {
-        // Kick them out to the student dashboard
-        router.push("/dashboard"); 
-      }
-    }
-  }, [isLoaded, user, router]);
-
-  // While checking, show a loading screen or nothing
-  if (!isLoaded || !user?.primaryEmailAddress?.emailAddress) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-pulse flex flex-col items-center gap-2 text-slate-400 font-bold">
-           <ShieldAlert size={48} />
-           Checking Admin Privileges...
-        </div>
-      </div>
-    );
+  if (!isAdmin) {
+    redirect("/dashboard"); 
   }
 
-  // Double check render block (prevents flash of content)
-  if (user.primaryEmailAddress.emailAddress !== ADMIN_EMAIL) {
-    return null; 
-  }
-
-  // If we pass the checks, show the Admin pages
+  // We return ONLY the children. No extra <nav> or <div>.
   return <>{children}</>;
 }

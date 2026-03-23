@@ -1,119 +1,105 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
+import { ArrowLeft, Loader2, Star, Zap, Lock } from "lucide-react";
 import Link from "next/link";
-import { CreditCard, Clock, ChevronLeft, CheckCircle2 } from "lucide-react";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-export default function BookSession() {
+export default function BookingPage() {
   const { user, isLoaded } = useUser();
-  const [rate, setRate] = useState<number | null>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    async function getRate() {
-      if (!isLoaded || !user) return;
-      const { data } = await supabase
-        .from("student_profiles")
-        .select("hourly_rate")
-        .eq("id", user.id)
-        .maybeSingle();
-      
-      if (data) setRate(data.hourly_rate);
-      setLoading(false);
-    }
-    getRate();
-  }, [user, isLoaded]);
+    if (user) fetchStudentProfile();
+  }, [user]);
 
-  const handlePayment = async () => {
-    setIsProcessing(true);
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          userId: user?.id, 
-          userEmail: user?.primaryEmailAddress?.emailAddress 
-        }),
-      });
-      const { url } = await response.json();
-      if (url) window.location.href = url;
-    } catch (err) {
-      console.error(err);
-      setIsProcessing(false);
-    }
-  };
+  async function fetchStudentProfile() {
+    const { data } = await supabase
+      .from("student_profiles")
+      .select("*")
+      .eq("email", user?.primaryEmailAddress?.emailAddress)
+      .single();
+    setProfile(data);
+    setLoading(false);
+  }
 
-  if (loading) return <div className="p-20 text-center font-bold text-slate-400">Loading Portal...</div>;
+  if (!isLoaded || loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <Loader2 className="animate-spin text-blue-600" size={40} />
+    </div>
+  );
+
+  const hasCredits = (profile?.lessons_balance || 0) > 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
-      <Link href="/dashboard" className="mb-8 flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-slate-900 transition-colors">
-        <ChevronLeft size={16} /> Back to Dashboard
-      </Link>
-
-      <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200/50 border border-slate-100 p-10 overflow-hidden relative">
-        {/* Design Accents */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50" />
-        
-        <div className="relative">
-          <div className="bg-slate-900 text-white w-14 h-14 flex items-center justify-center rounded-2xl font-bold text-xl mb-6 shadow-xl">
-            EB
-          </div>
-          
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Book a Session</h1>
-          <p className="text-slate-500 text-sm mb-8 font-medium">1-on-1 Cambridge Natural Sciences Tutoring</p>
-
-          <div className="space-y-4 mb-10">
-            <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-              <div className="bg-white p-2 rounded-xl shadow-sm text-blue-600"><Clock size={20}/></div>
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Duration</p>
-                <p className="font-bold text-slate-700 text-sm">60 Minute Session</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 p-4 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-200">
-              <div className="bg-blue-500 p-2 rounded-xl text-white"><CreditCard size={20}/></div>
-              <div>
-                <p className="text-[10px] font-bold text-blue-200 uppercase tracking-widest">Your Rate</p>
-                <p className="font-black text-2xl">£{rate || 40}<span className="text-sm font-normal opacity-60">/hr</span></p>
-              </div>
-            </div>
-          </div>
-
-          <ul className="space-y-3 mb-10 px-1">
-            <li className="flex items-center gap-3 text-xs font-bold text-slate-500">
-              <CheckCircle2 size={16} className="text-emerald-500" /> Secure Payment via Stripe
-            </li>
-            <li className="flex items-center gap-3 text-xs font-bold text-slate-500">
-              <CheckCircle2 size={16} className="text-emerald-500" /> Instant Booking Confirmation
-            </li>
-            <li className="flex items-center gap-3 text-xs font-bold text-slate-500">
-              <CheckCircle2 size={16} className="text-emerald-500" /> Personalized Feedback included
-            </li>
-          </ul>
-
-          <button
-            onClick={handlePayment}
-            disabled={isProcessing}
-            className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-blue-600 transition-all transform active:scale-95 shadow-xl disabled:bg-slate-300 flex items-center justify-center gap-2"
-          >
-            {isProcessing ? "Connecting..." : "Proceed to Payment"}
-          </button>
-          
-          <p className="mt-6 text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest">
-            Evan Billings Tutoring • Cambridge
-          </p>
+    <div className="min-h-screen bg-[#f8fafc] font-sans">
+      <nav className="bg-white border-b border-slate-200 p-6">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <Link href="/dashboard" className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition font-black no-underline">
+            <ArrowLeft size={20} /> <span className="text-[10px] uppercase tracking-widest">Dashboard</span>
+          </Link>
+          <h1 className="text-xl font-black tracking-tighter text-slate-900 uppercase">Book Session</h1>
         </div>
-      </div>
+      </nav>
+
+      <main className="max-w-6xl mx-auto p-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          
+          <div className="lg:col-span-3">
+            {!hasCredits ? (
+              /* LOCK STATE: No Credits */
+              <div className="bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200 p-20 text-center flex flex-col items-center">
+                <div className="bg-blue-50 text-blue-600 p-6 rounded-3xl mb-6">
+                  <Lock size={40} />
+                </div>
+                <h2 className="text-3xl font-black text-slate-900 tracking-tighter mb-4">Insufficient Lesson Balance</h2>
+                <p className="text-slate-500 font-bold max-w-sm mb-10 leading-relaxed uppercase text-xs tracking-widest">
+                  You currently have 0 lessons remaining. Please top up your account to unlock the booking calendar.
+                </p>
+                <Link href="/dashboard/payments" className="bg-blue-600 text-white px-10 py-5 rounded-2xl font-black text-lg shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all">
+                  Top Up Balance
+                </Link>
+              </div>
+            ) : (
+              /* ACTIVE STATE: Show Cal.com */
+              <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden h-[750px]">
+                <iframe
+                  src={`https://cal.com/evanbillings/lesson?email=${user?.primaryEmailAddress?.emailAddress}&name=${user?.firstName}`}
+                  title="Lesson Booking"
+                  className="w-full h-full border-none"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm">
+                <h3 className="font-black text-slate-900 mb-6 flex items-center gap-2 uppercase text-[10px] tracking-widest">
+                    <Star size={14} className="text-blue-600" fill="currentColor" /> Lesson Credits
+                </h3>
+                <div className="space-y-6">
+                    <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Balance</p>
+                        <p className="text-4xl font-black text-slate-900 tracking-tighter">
+                            {profile?.lessons_balance || 0}
+                        </p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase mt-1">Sessions Remaining</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-slate-900 rounded-[2rem] p-8 text-white">
+                <Zap className="mb-4 text-blue-500" size={24} fill="currentColor" />
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] leading-relaxed">
+                  Booking a slot will automatically deduct 1 lesson from your balance.
+                </p>
+            </div>
+          </div>
+
+        </div>
+      </main>
     </div>
   );
 }
