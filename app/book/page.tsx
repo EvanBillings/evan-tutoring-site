@@ -19,7 +19,7 @@ export default function BookingPage() {
     const { data } = await supabase
       .from("student_profiles")
       .select("*")
-      .eq("email", user?.primaryEmailAddress?.emailAddress)
+      .eq("email", user.primaryEmailAddress!.emailAddress)
       .single();
     setProfile(data);
     setLoading(false);
