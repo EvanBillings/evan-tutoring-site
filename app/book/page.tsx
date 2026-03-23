@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
 import { supabase } from "@/lib/supabase";
 import { ArrowLeft, Loader2, Star, Zap, Lock } from "lucide-react";
@@ -11,19 +11,34 @@ export default function BookingPage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) fetchStudentProfile();
+  // Use useCallback to prevent unnecessary re-renders
+  const fetchStudentProfile = useCallback(async () => {
+    if (!user?.primaryEmailAddress?.emailAddress) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("student_profiles")
+        .from("student_profiles")
+        .select("*")
+        .eq("email", user.primaryEmailAddress.emailAddress)
+        .maybeSingle(); // maybeSingle prevents errors if profile doesn't exist yet
+
+      if (error) throw error;
+      setProfile(data);
+    } catch (err) {
+      console.error("Error fetching profile:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
-  async function fetchStudentProfile() {
-    const { data } = await supabase
-      .from("student_profiles")
-      .select("*")
-      .eq("email", user.primaryEmailAddress!.emailAddress)
-      .single();
-    setProfile(data);
-    setLoading(false);
-  }
+  useEffect(() => {
+    if (isLoaded && user) {
+      fetchStudentProfile();
+    } else if (isLoaded && !user) {
+      setLoading(false);
+    }
+  }, [user, isLoaded, fetchStudentProfile]);
 
   if (!isLoaded || loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -49,7 +64,6 @@ export default function BookingPage() {
           
           <div className="lg:col-span-3">
             {!hasCredits ? (
-              /* LOCK STATE: No Credits */
               <div className="bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200 p-20 text-center flex flex-col items-center">
                 <div className="bg-blue-50 text-blue-600 p-6 rounded-3xl mb-6">
                   <Lock size={40} />
@@ -63,7 +77,6 @@ export default function BookingPage() {
                 </Link>
               </div>
             ) : (
-              /* ACTIVE STATE: Show Cal.com */
               <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden h-[750px]">
                 <iframe
                   src={`https://cal.com/evanbillings/lesson?email=${user?.primaryEmailAddress?.emailAddress}&name=${user?.firstName}`}
