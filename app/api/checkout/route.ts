@@ -1,22 +1,15 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-// Initialize Stripe with the Secret Key from environment variables
-// Using the 2026-02-25.clover version string to match your SDK version
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-02-25.clover" as any,
-});
+// Initialize Stripe. 
+// Note: We remove the manual version string and let the SDK handle it,
+// which is the recommended approach for Stripe v20.4+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function POST(req: Request) {
   try {
     const { email, rate, userId } = await req.json();
 
-    // 1. Validation check
-    if (!email || !rate) {
-      return NextResponse.json({ error: "Missing email or rate" }, { status: 400 });
-    }
-
-    // 2. Create the Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -25,33 +18,27 @@ export async function POST(req: Request) {
             currency: "gbp",
             product_data: {
               name: "EB Tutors - 1-Hour Lesson Credit",
-              description: `Pre-paid tutoring session for ${email}. Rate: £${rate}/hr`,
+              description: `Pre-paid session for ${email}.`,
             },
-            unit_amount: rate * 100, // Stripe expects amount in pence
+            unit_amount: rate * 100, 
           },
           quantity: 1,
         },
       ],
       mode: "payment",
-      // Redirect back to your dashboard with a success flag
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?payment=success`,
       cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/book`,
       customer_email: email,
-      // Metadata is crucial for your Webhook to update the student's credits in Supabase
       metadata: {
         student_email: email,
-        type: "lesson_topup",
         userId: userId || "",
+        type: "lesson_topup",
       },
     });
 
-    // 3. Return the session URL so the frontend can redirect the user
     return NextResponse.json({ url: session.url });
   } catch (err: any) {
-    console.error("Stripe Checkout Error:", err);
-    return NextResponse.json(
-      { error: err.message || "Internal Server Error" }, 
-      { status: 500 }
-    );
+    console.error("Stripe Error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
