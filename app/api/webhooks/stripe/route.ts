@@ -65,7 +65,7 @@ export async function POST(req: Request) {
             amount_paid: session.amount_total ? session.amount_total / 100 : 0,
             lessons_added: 1,
             stripe_session_id: session.id,
-          })
+          }as any)
       ]);
         
       console.log(`✅ Success: Logged payment and added 1 lesson to ${studentEmail}`);

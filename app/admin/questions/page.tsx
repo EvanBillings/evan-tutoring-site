@@ -74,16 +74,11 @@ export default function QuestionFactory() {
     }
 
     const { error } = await supabase.from('quiz_questions').insert({
-      topic_id: selectedTopic,
-      question: questionText,
-      image_url: imageUrl || null, // Save URL or null
-      option_a: optionA,
-      option_b: optionB,
-      option_c: optionC,
-      option_d: optionD,
-      correct_answer: correctAnswer,
-      explanation: explanation
-    });
+  topic_id: selectedTopic,
+  question: questionText,
+  image_url: imageUrl || null,
+  // ...rest of fields
+} as any);
 
     if (error) {
         setMsg({ type: 'error', text: error.message });

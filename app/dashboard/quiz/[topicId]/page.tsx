@@ -103,7 +103,7 @@ export default function ReviewPage() {
 
       const { data, error } = await supabase
         .from("quiz_results")
-        .insert([payload])
+        .insert([payload] as any)
         .select();
 
       if (error) console.error("Supabase Error:", error.message);
