@@ -15,7 +15,7 @@ export default function LessonBalance({ email }: { email: string }) {
         .select("lessons_balance")
         .eq("email", email)
         .single();
-      setBalance(data?.lessons_balance || 0);
+      setBalance((data as any)?.lessons_balance || 0);
     }
     getBalance();
   }, [email]);
