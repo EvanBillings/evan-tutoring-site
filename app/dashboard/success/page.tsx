@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle, Calendar, ArrowRight, PartyPopper } from "lucide-react";
+import { CheckCircle, Calendar, ArrowRight } from "lucide-react";
+
 export const dynamic = 'force-dynamic';
-export default function BookingSuccess() {
+
+function SuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
 
@@ -44,5 +46,13 @@ export default function BookingSuccess() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BookingSuccess() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400">Loading...</div>}>
+      <SuccessContent />
+    </Suspense>
   );
 }
