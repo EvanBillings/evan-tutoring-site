@@ -6,11 +6,15 @@ import { ClerkProvider } from "@clerk/nextjs";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "EB Tutors | Physics & Maths Tutoring",
-  description: "Bespoke tutoring from Cambridge Natural Sciences.",
+  title: "EB Tutors | Physics & Maths",
+  description: "Expert tutoring from Cambridge Natural Sciences.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <ClerkProvider>
       <html lang="en">
