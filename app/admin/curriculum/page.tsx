@@ -35,13 +35,19 @@ type Question = {
   correct_answer: 'a' | 'b' | 'c' | 'd';
 };
 
+type RawModule = {
+  id: number;
+  title: string;
+  order_index: number;
+};
+
 export default function CurriculumManager() {
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Selection State
   const [activeModuleId, setActiveModuleId] = useState<number | null>(null);
-  const [activeTopicId, setActiveTopicId] = useState<string | null>(null); // For editing quiz
+  const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
 
   // New Data Forms
   const [newModuleTitle, setNewModuleTitle] = useState("");
@@ -62,11 +68,14 @@ export default function CurriculumManager() {
       const { data: topicsData } = await supabase.from('topics').select('*');
 
       if (modulesData && topicsData) {
-        const merged = modulesData.map((mod) => ({
+        const typedModules = modulesData as RawModule[];
+        const typedTopics = topicsData as Topic[];
+
+        const merged: Module[] = typedModules.map((mod) => ({
             ...mod,
-            topics: topicsData
-            .filter((t) => t.module_id === mod.id)
-            .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }))
+            topics: typedTopics
+              .filter((t) => t.module_id === mod.id)
+              .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }))
         }));
         setModules(merged);
         if (!activeModuleId && merged.length > 0) setActiveModuleId(merged[0].id);
@@ -98,7 +107,7 @@ export default function CurriculumManager() {
   const handleAddModule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newModuleTitle.trim()) return;
-    await supabase.from('modules').insert({ title: newModuleTitle, order_index: modules.length + 1 });
+    await supabase.from('modules').insert({ title: newModuleTitle, order_index: modules.length + 1 } as any);
     setNewModuleTitle("");
     fetchCurriculum();
   };
@@ -107,8 +116,8 @@ export default function CurriculumManager() {
     e.preventDefault();
     if (!activeModuleId || !newTopicId || !newTopicTitle) return;
     await supabase.from('topics').insert({
-        id: newTopicId, module_id: activeModuleId, title: newTopicTitle, has_video: true, has_questions: true
-    });
+    id: newTopicId, module_id: activeModuleId, title: newTopicTitle, has_video: true, has_questions: true
+} as any);
     setNewTopicId(""); setNewTopicTitle("");
     fetchCurriculum();
   };
@@ -118,18 +127,18 @@ export default function CurriculumManager() {
     if (!activeTopicId) return;
 
     const { error } = await supabase.from('quiz_questions').insert({
-        topic_id: activeTopicId,
-        question: qForm.question,
-        option_a: qForm.a,
-        option_b: qForm.b,
-        option_c: qForm.c,
-        option_d: qForm.d,
-        correct_answer: qForm.correct
-    });
+    topic_id: activeTopicId,
+    question: qForm.question,
+    option_a: qForm.a,
+    option_b: qForm.b,
+    option_c: qForm.c,
+    option_d: qForm.d,
+    correct_answer: qForm.correct
+} as any);
 
     if (!error) {
-        setQForm({ question: "", a: "", b: "", c: "", d: "", correct: "a" }); // Reset
-        fetchQuestions(activeTopicId); // Refresh list
+        setQForm({ question: "", a: "", b: "", c: "", d: "", correct: "a" });
+        fetchQuestions(activeTopicId);
     } else {
         alert("Error saving question");
     }
