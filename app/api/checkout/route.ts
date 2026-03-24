@@ -4,7 +4,7 @@ import Stripe from "stripe";
 // Initialize Stripe. For v20+, it is best to let the SDK handle 
 // the versioning unless you have a specific requirement.
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-02-25.clover" as any, 
+  apiVersion: "2024-06-20" as any, 
 });
 
 export async function POST(req: Request) {
@@ -33,7 +33,13 @@ export async function POST(req: Request) {
       success_url: `${baseUrl}/dashboard?payment=success`,
       cancel_url: `${baseUrl}/book`,
       customer_email: email,
-      metadata: { userId, email, type: "lesson_topup" },
+      // SUGGESTED CHANGE: Explicitly setting student_email in metadata for the webhook
+      metadata: { 
+        userId, 
+        email, 
+        student_email: email, 
+        type: "lesson_topup" 
+      },
     });
 
     return NextResponse.json({ url: session.url });
