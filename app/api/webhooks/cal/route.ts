@@ -2,13 +2,15 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
   try {
     const body = await req.json();
+    console.log("Cal webhook body:", JSON.stringify(body));
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     const payload = body.payload;
 
     // Guard against ping tests or malformed payloads
@@ -19,9 +21,7 @@ export async function POST(req: Request) {
     
     const attendeeEmail = payload.attendees[0].email;
     const triggerEvent = body.triggerEvent;
-
-    const responses = payload.responses;
-    const chosenSubject = responses?.subject?.value || "Unspecified";
+    const chosenSubject = payload.responses?.subject?.value || "Unspecified";
 
     console.log(`🔔 Webhook Received: ${triggerEvent} for ${attendeeEmail}`);
 
