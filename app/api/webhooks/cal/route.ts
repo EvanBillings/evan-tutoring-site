@@ -10,13 +10,18 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const payload = body.payload;
+
+    // Guard against ping tests or malformed payloads
+    if (!payload?.attendees?.[0]?.email) {
+      console.log("⚠️ No attendee email found - likely a ping test");
+      return NextResponse.json({ received: true });
+    }
     
     const attendeeEmail = payload.attendees[0].email;
     const triggerEvent = body.triggerEvent;
 
     const responses = payload.responses;
     const chosenSubject = responses?.subject?.value || "Unspecified";
-    const chosenLevel = responses?.level?.value || "Unspecified";
 
     console.log(`🔔 Webhook Received: ${triggerEvent} for ${attendeeEmail}`);
 
